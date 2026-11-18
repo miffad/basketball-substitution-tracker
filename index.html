@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#152238">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Basketball Substitution Tracker</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f3f5f8}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);max-width:760px;margin-inline:auto}
+header{background:#152238;color:white;margin:0 -12px 14px;padding:18px 16px;border-radius:0 0 16px 16px}
+h1{font-size:22px;margin:0 0 4px}header p{margin:0;color:#d6dfed;font-size:13px}
+.panel{background:white;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 1px 5px #17203312}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{flex:1}
+label{display:block;font-size:12px;font-weight:700;color:#526078;margin-bottom:5px}
+input,select,button{font:inherit}input[type=text],input[type=number],select{width:100%;padding:11px;border:1px solid #cbd3df;border-radius:9px;background:white}
+button{border:0;border-radius:10px;padding:11px 13px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.35;cursor:not-allowed}.green{background:#16834a;color:white}.red{background:#c83737;color:white}.dark{background:#20334f;color:white}.light{background:#e8edf4;color:#20334f}.warn{background:#fff1c9;color:#694b00;border:1px solid #efd17c}
+.clock{font-size:24px;font-weight:800;letter-spacing:1px;text-align:center}
+.count{font-weight:800;text-align:center}.muted{color:#64718a;font-size:12px}
+.player{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #edf0f4}
+.player:last-child{border:0}.playername{font-weight:750;overflow-wrap:anywhere}.status{font-size:11px;font-weight:800;margin-left:7px;padding:3px 7px;border-radius:20px;background:#edf0f4;color:#566176}.status.in{background:#d9f4e4;color:#126438}
+.times{font-size:11px;color:#68748a;margin-top:4px;line-height:1.5}.actions{display:flex;gap:6px}.actions button{padding:9px 10px;min-width:58px}
+.alert{padding:10px;border-radius:10px;margin:7px 0;background:#fff1c9;color:#694b00;font-size:13px}
+h2{font-size:16px;margin:0 0 10px}.history{font-size:12px;max-height:220px;overflow:auto}.history div{padding:6px 0;border-bottom:1px solid #edf0f4}
+small{font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap}.tools button{flex:1}
+@media(min-width:560px){.roster{display:grid;grid-template-columns:1fr 1fr;column-gap:16px}}
+</style>
+</head>
+<body>
+<header><h1>Basketball Substitution Tracker</h1><p>Manual scoreboard clock · two 20-minute halves</p></header>
+<section class="panel">
+  <div class="row">
+    <div><label for="half">HALF</label><select id="half"><option value="1">1st Half</option><option value="2">2nd Half</option></select></div>
+    <div><label for="clock">SCOREBOARD CLOCK (MM:SS)</label><input id="clock" inputmode="numeric" value="20:00" placeholder="20:00"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div class="count" id="floorCount">0 / 5 ON COURT</div>
+    <div class="muted" id="clockHelp" style="text-align:right">Enter the time shown on the scoreboard</div>
+  </div>
+</section>
+<section class="panel" id="alertsPanel" hidden><h2>Playing-time alerts</h2><div id="alerts"></div></section>
+<section class="panel">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Roster</h2><button class="light" id="editNames">Edit names</button></div>
+  <p class="muted">Tap ENTER when a player checks in and EXIT when they leave. Time is captured from the clock above.</p>
+  <div class="roster" id="roster"></div>
+</section>
+<section class="panel"><h2>Substitution history</h2><div class="history" id="history">No substitutions recorded yet.</div></section>
+<section class="panel">
+  <div class="tools">
+    <button class="light" id="export">Export CSV</button>
+    <button class="light" id="reset">New game</button>
+  </div>
+  <p class="muted">Your roster and current game are saved on this device. Use Export CSV to keep a copy of the substitution log.</p>
+</section>
+<script>
+(()=>{
+const KEY='basketballSubTrackerV1';
+const defaultNames=Array.from({length:20},(_,i)=>`Player ${i+1}`);
+let state=load();
+function fresh(){return {names:defaultNames.slice(),players:defaultNames.map((_,i)=>({in:false,lastIn:null,lastOut:null,enteredAt:null,threshold:10})),events:[],alerts:[]}}
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x&&x.players?.length===20&&x.names?.length===20)return x}catch(e){}return fresh()}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+const $=id=>document.getElementById(id);
+function clockText(){let v=$('clock').value.trim();if(!/^\d{1,2}:\d{2}$/.test(v))return null;let [m,s]=v.split(':').map(Number);if(s>59||m>20||(m===20&&s>0))return null;return {m,s,text:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}}
+function elapsedGameSeconds(){const c=clockText();if(!c)return null;let remaining=c.m*60+c.s;return ($('half').value==='1'?0:1200)+(1200-remaining)}
+function stamp(){const c=clockText();return c?`${$('half').value==='1'?'1st':'2nd'} Half ${c.text}`:'Invalid clock'}
+function fmt(sec){if(sec==null||!Number.isFinite(sec)||sec<0)return'—';return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(Math.floor(sec%60)).padStart(2,'0')}`}
+function playedNow(p){if(!p.in||p.enteredAt==null)return 0;let now=elapsedGameSeconds();return now==null?0:Math.max(0,now-p.enteredAt)}
+function render(){
+ const on=state.players.filter(p=>p.in).length;$('floorCount').textContent=`${on} / 5 ON COURT`;
+ $('roster').innerHTML='';
+ state.players.forEach((p,i)=>{
+  const d=document.createElement('div');d.className='player';
+  const info=document.createElement('div');
+  const nm=document.createElement('div');nm.className='playername';nm.textContent=state.names[i];
+  const badge=document.createElement('span');badge.className='status'+(p.in?' in':'');badge.textContent=p.in?'IN':'OUT';nm.append(badge);
+  const times=document.createElement('div');times.className='times';
+  times.textContent=`Last entered: ${p.lastIn||'—'} · Last exited: ${p.lastOut||'—'} · ${p.in?'Current stint: '+fmt(playedNow(p)):'Last stint: '+(p.lastDuration||'—')}`;
+  info.append(nm,times);
+  const actions=document.createElement('div');actions.className='actions';
+  const en=document.createElement('button');en.className='green';en.textContent='ENTER';en.disabled=p.in||on>=5||elapsedGameSeconds()==null;en.onclick=()=>enter(i);
+  const ex=document.createElement('button');ex.className='red';ex.textContent='EXIT';ex.disabled=!p.in||elapsedGameSeconds()==null;ex.onclick=()=>leave(i);
+  actions.append(en,ex);d.append(info,actions);$('roster').append(d);
+ });
+ $('history').innerHTML=state.events.length?state.events.slice().reverse().map(e=>`<div><b>${escapeHtml(e.name)}</b> ${e.action} · ${escapeHtml(e.time)}${e.duration?` · stint ${e.duration}`:''}</div>`).join(''):'No substitutions recorded yet.';
+ $('alertsPanel').hidden=!state.alerts.length;
+ $('alerts').innerHTML=state.alerts.slice().reverse().map((a,i)=>`<div class="alert">${escapeHtml(a.message)} <button class="light" style="float:right;padding:3px 8px" data-dismiss="${state.alerts.length-1-i}">Dismiss</button><div style="clear:both"></div></div>`).join('');
+ $('alerts').querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=()=>{state.alerts.splice(Number(b.dataset.dismiss),1);save();render()});
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function enter(i){if(state.players[i].in||state.players.filter(p=>p.in).length>=5)return;const now=elapsedGameSeconds();if(now==null)return;const p=state.players[i];p.in=true;p.enteredAt=now;p.lastIn=stamp();p.threshold=10;state.events.push({name:state.names[i],action:'ENTERED',time:stamp()});checkWarnings();save();render()}
+function leave(i){const p=state.players[i];if(!p.in)return;const now=elapsedGameSeconds();if(now==null)return;checkWarnings();const duration=Math.max(0,now-p.enteredAt);p.lastDuration=fmt(duration);p.in=false;p.lastOut=stamp();p.enteredAt=null;state.events.push({name:state.names[i],action:'EXITED',time:stamp(),duration:fmt(duration)});save();render()}
+function checkWarnings(){const now=elapsedGameSeconds();if(now==null)return;state.players.forEach((p,i)=>{if(!p.in||p.enteredAt==null)return;let mins=Math.floor((now-p.enteredAt)/60);if(mins>=p.threshold){state.alerts.push({message:`${state.names[i]} has played ${mins} minutes since entering.`});p.threshold=Math.floor(mins/2)*2+2}})}
+$('clock').addEventListener('input',render);$('half').addEventListener('change',render);
+$('editNames').onclick=()=>{const updated=state.names.map((n,i)=>prompt(`Player ${i+1} name:`,n));if(updated.some(x=>x===null))return;state.names=updated.map((x,i)=>x.trim()||`Player ${i+1}`);save();render()};
+$('reset').onclick=()=>{if(!confirm('Start a new game? This clears the current game and history but keeps player names.'))return;const names=state.names.slice();state=fresh();state.names=names;save();$('half').value='1';$('clock').value='20:00';render()};
+$('export').onclick=()=>{const rows=[['Player','Action','Game time','Stint'] ,...state.events.map(e=>[e.name,e.action,e.time,e.duration||''])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='basketball-substitutions.csv';a.click();URL.revokeObjectURL(a.href)};
+save();render();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+})();
+</script>
+</body></html>

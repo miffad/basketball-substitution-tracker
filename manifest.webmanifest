@@ -1,0 +1,9 @@
+{
+  "name": "Basketball Substitution Tracker",
+  "short_name": "Sub Tracker",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f8",
+  "theme_color": "#152238",
+  "icons": []
+}
