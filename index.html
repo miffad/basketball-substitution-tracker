@@ -19,6 +19,9 @@ button{border:0;border-radius:10px;padding:11px 13px;font-weight:700;cursor:poin
 button:disabled{opacity:.35;cursor:not-allowed}.green{background:#16834a;color:white}.red{background:#c83737;color:white}.dark{background:#20334f;color:white}.light{background:#e8edf4;color:#20334f}.warn{background:#fff1c9;color:#694b00;border:1px solid #efd17c}
 .clock{font-size:24px;font-weight:800;letter-spacing:1px;text-align:center}
 .count{font-weight:800;text-align:center}.muted{color:#64718a;font-size:12px}
+.on-court{margin-top:10px;padding:10px 12px;background:#581426;color:#fff;border-radius:10px}
+.on-court-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:5px 0;border-bottom:1px solid #ffffff2b}
+.on-court-row:last-child{border-bottom:0}.on-court-name{font-weight:700;overflow-wrap:anywhere}.on-court-time{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}.on-court-empty{font-size:12px;color:#f1dfe4;padding:3px 0}
 .player{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #edf0f4}
 .player:last-child{border:0}.playername{font-weight:750;overflow-wrap:anywhere}.status{font-size:11px;font-weight:800;margin-left:7px;padding:3px 7px;border-radius:20px;background:#edf0f4;color:#566176}.status.in{background:#d9f4e4;color:#126438}
 .times{font-size:11px;color:#68748a;margin-top:4px;line-height:1.5}.actions{display:flex;gap:6px}.actions button{padding:9px 10px;min-width:58px}
@@ -33,12 +36,13 @@ small{font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap}.tools button{fl
 <section class="panel">
   <div class="row">
     <div><label for="half">HALF</label><select id="half"><option value="1">1st Half</option><option value="2">2nd Half</option></select></div>
-    <div><label for="clock">SCOREBOARD CLOCK (MM:SS)</label><input id="clock" inputmode="text" value="20:00" placeholder="20:00"></div>
+    <div><label for="clock">SCOREBOARD CLOCK (MM:SS)</label><input id="clock" inputmode="numeric" value="20:00" placeholder="20:00"></div>
   </div>
   <div class="row" style="margin-top:10px">
     <div class="count" id="floorCount">0 / 5 ON COURT</div>
     <div class="muted" id="clockHelp" style="text-align:right">Enter the time shown on the scoreboard</div>
   </div>
+  <div class="on-court" id="onCourtList" aria-live="polite"><div class="on-court-empty">No players currently on court</div></div>
 </section>
 <section class="panel" id="alertsPanel" hidden><h2>Playing-time alerts</h2><div id="alerts"></div></section>
 <section class="panel">
@@ -69,7 +73,10 @@ function stamp(){const c=clockText();return c?`${$('half').value==='1'?'1st':'2n
 function fmt(sec){if(sec==null||!Number.isFinite(sec)||sec<0)return'—';return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(Math.floor(sec%60)).padStart(2,'0')}`}
 function playedNow(p){if(!p.in||p.enteredAt==null)return 0;let now=elapsedGameSeconds();return now==null?0:Math.max(0,now-p.enteredAt)}
 function render(){
- const on=state.players.filter(p=>p.in).length;$('floorCount').textContent=`${on} / 5 ON COURT`;
+ const onPlayers=state.players.map((p,i)=>({p,i})).filter(x=>x.p.in);
+ const on=onPlayers.length;$('floorCount').textContent=`${on} / 5 ON COURT`;
+ const lineup=$('onCourtList');
+ lineup.innerHTML=onPlayers.length?onPlayers.map(({p,i})=>`<div class="on-court-row"><span class="on-court-name">${escapeHtml(state.names[i])}</span><span class="on-court-time">${fmt(playedNow(p))}</span></div>`).join(''):'<div class="on-court-empty">No players currently on court</div>';
  $('roster').innerHTML='';
  state.players.forEach((p,i)=>{
   const d=document.createElement('div');d.className='player';
